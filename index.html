@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard Products</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+  body { background: #f8f9fa; }
+  img { width: 70px; height: 70px; object-fit: cover; border-radius: 6px; }
+  tr { cursor: pointer; }
+  th.sortable { cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="container mt-4">
+  <h3 class="text-center mb-3">📊 Product Dashboard</h3>
+
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <input id="searchInput" class="form-control" placeholder="🔍 Tìm kiếm theo title...">
+    </div>
+
+    <div class="col-md-2">
+      <select id="pageSize" class="form-select">
+        <option value="5">5 / trang</option>
+        <option value="10" selected>10 / trang</option>
+        <option value="20">20 / trang</option>
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <button class="btn btn-success w-100" onclick="exportCSV()">Export CSV</button>
+    </div>
+
+    <div class="col-md-2">
+      <button class="btn btn-primary w-100" onclick="openCreateModal()">➕ Create</button>
+    </div>
+  </div>
+
+  <table class="table table-bordered table-hover align-middle">
+    <thead class="table-dark text-center">
+      <tr>
+        <th>ID</th>
+        <th class="sortable" onclick="sortBy('title')">Title ⬍</th>
+        <th class="sortable" onclick="sortBy('price')">Price ⬍</th>
+        <th>Category</th>
+        <th>Image</th>
+      </tr>
+    </thead>
+    <tbody id="products"></tbody>
+  </table>
+
+  <nav>
+    <ul class="pagination justify-content-center" id="pagination"></ul>
+  </nav>
+</div>
+
+<!-- MODAL DETAIL + EDIT -->
+<div class="modal fade" id="productModal">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Product Detail</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="modalId">
+
+        <div class="mb-3">
+          <label>Title</label>
+          <input id="modalTitle" class="form-control">
+        </div>
+
+        <div class="mb-3">
+          <label>Price</label>
+          <input id="modalPrice" type="number" class="form-control">
+        </div>
+
+        <div class="mb-3">
+          <label>Description</label>
+          <textarea id="modalDesc" class="form-control"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label>Image URL</label>
+          <input id="modalImage" class="form-control">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="updateProduct()">Save</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREATE -->
+<div class="modal fade" id="createModal">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Create Product</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-3">
+          <label>Title</label>
+          <input id="createTitle" class="form-control">
+        </div>
+
+        <div class="mb-3">
+          <label>Price</label>
+          <input id="createPrice" type="number" class="form-control">
+        </div>
+
+        <div class="mb-3">
+          <label>Description</label>
+          <textarea id="createDesc" class="form-control"></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label>Category ID</label>
+          <input id="createCategory" type="number" value="1" class="form-control">
+        </div>
+
+        <div class="mb-3">
+          <label>Image URL</label>
+          <input id="createImage" class="form-control">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="createProduct()">Create</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const API_URL = "https://api.escuelajs.co/api/v1/products";
+
+let allProducts = [];
+let filteredProducts = [];
+let currentPage = 1;
+let pageSizeValue = 10;
+let sortState = { field: "", asc: true };
+
+fetch(API_URL)
+.then(res => res.json())
+.then(data => {
+  allProducts = data;
+  filteredProducts = data;
+  render();
+});
+
+function render() {
+  renderTable();
+  renderPagination();
+}
+
+function getCurrentPageData() {
+  const start = (currentPage - 1) * pageSizeValue;
+  return filteredProducts.slice(start, start + pageSizeValue);
+}
+
+function renderTable() {
+  products.innerHTML = "";
+  getCurrentPageData().forEach(p => {
+    const tr = document.createElement("tr");
+    tr.onclick = () => openModal(p);
+    tr.innerHTML = `
+      <td class="text-center">${p.id}</td>
+      <td>${p.title}</td>
+      <td class="text-center">$${p.price}</td>
+      <td class="text-center">${p.category?.name}</td>
+      <td class="text-center"><img src="${p.images?.[0] || ''}"></td>
+    `;
+    products.appendChild(tr);
+  });
+}
+
+function renderPagination() {
+  pagination.innerHTML = "";
+  const totalPages = Math.ceil(filteredProducts.length / pageSizeValue);
+  for (let i = 1; i <= totalPages; i++) {
+    const li = document.createElement("li");
+    li.className = `page-item ${i === currentPage ? "active" : ""}`;
+    li.innerHTML = `<a class="page-link">${i}</a>`;
+    li.onclick = () => { currentPage = i; renderTable(); };
+    pagination.appendChild(li);
+  }
+}
+
+/* SEARCH */
+searchInput.oninput = () => {
+  filteredProducts = allProducts.filter(p =>
+    p.title.toLowerCase().includes(searchInput.value.toLowerCase())
+  );
+  currentPage = 1;
+  render();
+};
+
+/* PAGE SIZE */
+pageSize.onchange = () => {
+  pageSizeValue = +pageSize.value;
+  currentPage = 1;
+  render();
+};
+
+/* SORT */
+function sortBy(field) {
+  sortState.asc = sortState.field === field ? !sortState.asc : true;
+  sortState.field = field;
+  filteredProducts.sort((a,b) =>
+    sortState.asc ? a[field] > b[field] ? 1 : -1 : a[field] < b[field] ? 1 : -1
+  );
+  render();
+}
+
+/* MODAL EDIT */
+function openModal(p) {
+  modalId.value = p.id;
+  modalTitle.value = p.title;
+  modalPrice.value = p.price;
+  modalDesc.value = p.description;
+  modalImage.value = p.images?.[0] || "";
+  new bootstrap.Modal(productModal).show();
+}
+
+function updateProduct() {
+  fetch(`${API_URL}/${modalId.value}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: modalTitle.value,
+      price: +modalPrice.value,
+      description: modalDesc.value,
+      images: [modalImage.value]
+    })
+  })
+  .then(res => res.json())
+  .then(updated => {
+    const idx = allProducts.findIndex(p => p.id == updated.id);
+    allProducts[idx] = { ...allProducts[idx], ...updated };
+    filteredProducts = allProducts;
+    render();
+    bootstrap.Modal.getInstance(productModal).hide();
+  });
+}
+
+/* CREATE */
+function openCreateModal() {
+  createTitle.value = "";
+  createPrice.value = "";
+  createDesc.value = "";
+  createCategory.value = 1;
+  createImage.value = "";
+  new bootstrap.Modal(createModal).show();
+}
+
+function createProduct() {
+  fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: createTitle.value,
+      price: +createPrice.value,
+      description: createDesc.value,
+      categoryId: +createCategory.value,
+      images: [createImage.value]
+    })
+  })
+  .then(res => res.json())
+  .then(p => {
+    allProducts.unshift(p);
+    filteredProducts = allProducts;
+    currentPage = 1;
+    render();
+    bootstrap.Modal.getInstance(createModal).hide();
+  });
+}
+
+/* EXPORT */
+function exportCSV() {
+  let csv = "\uFEFFID,Title,Price,Category\n";
+  getCurrentPageData().forEach(p => {
+    csv += `${p.id},"${p.title}",${p.price},"${p.category?.name}"\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "products_view.csv";
+  a.click();
+}
+</script>
+
+</body>
+</html>
